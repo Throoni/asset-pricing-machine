@@ -45,7 +45,10 @@ def cmd_validate(args):
 
 def cmd_dashboard(args):
     # interactive dashboard
-    sys.exit(run([sys.executable, "code/08_dashboard.py"]))
+    cmd = [sys.executable, "code/08_dashboard.py"]
+    if hasattr(args, 'port') and args.port:
+        cmd.extend(["--port", str(args.port)])
+    sys.exit(run(cmd))
 
 def cmd_all(args):
     steps = [
@@ -73,7 +76,8 @@ def main():
     sp.add_parser("cs").set_defaults(fn=cmd_cs)
     sp.add_parser("frontier").set_defaults(fn=cmd_frontier)
     sp.add_parser("validate").set_defaults(fn=cmd_validate)
-    sp.add_parser("dashboard").set_defaults(fn=cmd_dashboard)
+    dashboard_parser = sp.add_parser("dashboard").set_defaults(fn=cmd_dashboard)
+    dashboard_parser.add_argument("--port", type=int, help="Port to run the dashboard on")
     sp.add_parser("all").set_defaults(fn=cmd_all)
 
     args = p.parse_args()

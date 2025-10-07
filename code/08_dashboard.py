@@ -451,13 +451,19 @@ def update_tab_content(active_tab, data):
 
 def main():
     """Main function to run the dashboard."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Asset Pricing Machine Dashboard")
+    parser.add_argument("--port", type=int, default=8050, help="Port to run the dashboard on")
+    args = parser.parse_args()
+    
     print("🚀 Starting Asset Pricing Machine Dashboard...")
-    print("📊 Dashboard will be available at: http://127.0.0.1:8050")
+    print(f"📊 Dashboard will be available at: http://127.0.0.1:{args.port}")
     print("🔄 Use the 'Reload Data' button to refresh visualizations")
     print("⏹️  Press Ctrl+C to stop the dashboard")
     print("-" * 60)
     
-    app.run(debug=False, host='127.0.0.1', port=8050)
+    app.run(debug=False, host='127.0.0.1', port=args.port)
 
 if __name__ == '__main__':
     main()
