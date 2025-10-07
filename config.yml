@@ -2,11 +2,11 @@
 # All TODO values must be filled before running the analysis
 
 project:
-  country: TODO   # e.g., Belgium or Germany
-  base_currency: TODO  # e.g., EUR
-  timezone: Europe/Brussels
-  start_date: TODO      # e.g., 2015-01-01
-  end_date:   TODO
+  country: Germany
+  base_currency: EUR
+  timezone: Europe/Berlin
+  start_date: "2015-01-01"
+  end_date: "2024-12-31"
   frequency: M
   seed: 42
 
@@ -17,13 +17,13 @@ universe:
   path_static_list: data/raw/stocks/   # folder with 25 CSVs (one per stock)
 
 benchmarks:
-  market_index: TODO    # e.g., use_value_weighted_of_universe or an index CSV
+  market_index: index_csv
   risk_model: both      # options: rf_capm, zero_beta, both
-  risk_free_source: TODO  # required if risk_model includes rf_capm; else leave TODO
-  index_csv: data/raw/index/index.csv  # if using an index file; else leave TODO
+  risk_free_source: data/raw/risk_free/rf_eur.csv
+  index_csv: data/raw/market/dax_tr.csv
 
 paths:
-  risk_free_csv: data/raw/rf/risk_free.csv   # optional; leave if unknown
+  risk_free_csv: data/raw/risk_free/rf_eur.csv
   fundamentals_csv: data/raw/fundamentals.csv  # optional B/M; leave if unknown
   market_caps_csv: data/raw/market_caps.csv    # optional VW weights
 

@@ -95,7 +95,7 @@ class TestFinanceGates:
         if not returns_path.exists():
             pytest.skip("Processed returns not found")
         
-        returns_df = pd.read_csv(returns_path)
+        returns_df = pd.read_parquet(returns_path)
         has_rf = 'rf' in returns_df.columns and returns_df['rf'].notna().any()
         
         # Get market excess return

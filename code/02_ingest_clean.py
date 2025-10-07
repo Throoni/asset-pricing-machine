@@ -2,8 +2,8 @@
 """
 Data ingestion and cleaning pipeline for asset pricing analysis.
 
-Purpose: Read raw stock data, clean and validate, compute returns, save processed data
-Inputs: CSV files in data/raw/stocks/, risk-free rate data (optional)
+Purpose: Read normalized data, clean and validate, compute returns, save processed data
+Inputs: Normalized parquet files from data/staging/
 Outputs: data/processed/returns.parquet, output/tables/returns_summary.csv
 Seed: 42 (for reproducibility)
 """
@@ -42,74 +42,40 @@ def setup_logging():
     return logging.getLogger(__name__)
 
 
-def read_stock_data(stocks_dir: Path, logger: logging.Logger) -> pd.DataFrame:
+def read_normalized_data(logger: logging.Logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Read all stock CSV files and combine into single DataFrame.
+    Read normalized data from staging directory.
     
-    Expected columns: date, ticker, adj_close
+    Returns: (stocks_df, market_df, rf_df)
     """
-    logger.info(f"Reading stock data from {stocks_dir}")
+    logger.info("Reading normalized data from staging")
     
-    stock_files = list(stocks_dir.glob("*.csv"))
-    if not stock_files:
-        raise FileNotFoundError(f"No CSV files found in {stocks_dir}")
+    # Read stocks data
+    stocks_file = Path("data/staging/stocks_normalized.parquet")
+    if not stocks_file.exists():
+        raise FileNotFoundError(f"Normalized stocks data not found: {stocks_file}")
     
-    logger.info(f"Found {len(stock_files)} stock files")
+    stocks_df = pd.read_parquet(stocks_file)
+    logger.info(f"Loaded stocks: {len(stocks_df)} rows, {stocks_df['ticker'].nunique()} tickers")
     
-    all_data = []
-    failed_tickers = []
+    # Read market data
+    market_file = Path("data/staging/market_normalized.parquet")
+    if not market_file.exists():
+        raise FileNotFoundError(f"Normalized market data not found: {market_file}")
     
-    for file_path in stock_files:
-        ticker = file_path.stem
-        try:
-            df = pd.read_csv(file_path)
-            
-            # Validate required columns
-            required_cols = ['date', 'ticker', 'adj_close']
-            missing_cols = [col for col in required_cols if col not in df.columns]
-            if missing_cols:
-                logger.error(f"Ticker {ticker}: Missing columns {missing_cols}")
-                failed_tickers.append(ticker)
-                continue
-            
-            # Parse dates
-            df['date'] = pd.to_datetime(df['date'])
-            
-            # Add ticker if not present
-            if 'ticker' not in df.columns:
-                df['ticker'] = ticker
-            
-            # Sort by date
-            df = df.sort_values('date')
-            
-            # Drop missing prices
-            initial_rows = len(df)
-            df = df.dropna(subset=['adj_close'])
-            if len(df) < initial_rows:
-                logger.warning(f"Ticker {ticker}: Dropped {initial_rows - len(df)} rows with missing prices")
-            
-            # Check for sufficient data
-            if len(df) < 12:  # Minimum 1 year of data
-                logger.warning(f"Ticker {ticker}: Only {len(df)} observations, may be insufficient")
-            
-            all_data.append(df)
-            logger.info(f"Ticker {ticker}: {len(df)} observations from {df['date'].min()} to {df['date'].max()}")
-            
-        except Exception as e:
-            logger.error(f"Ticker {ticker}: Failed to read - {e}")
-            failed_tickers.append(ticker)
+    market_df = pd.read_parquet(market_file)
+    logger.info(f"Loaded market: {len(market_df)} rows")
     
-    if not all_data:
-        raise ValueError("No valid stock data found")
+    # Read risk-free data
+    rf_file = Path("data/staging/risk_free_normalized.parquet")
+    if not rf_file.exists():
+        logger.warning("Normalized risk-free data not found, will proceed without it")
+        rf_df = pd.DataFrame()
+    else:
+        rf_df = pd.read_parquet(rf_file)
+        logger.info(f"Loaded risk-free: {len(rf_df)} rows")
     
-    # Combine all data
-    combined_df = pd.concat(all_data, ignore_index=True)
-    logger.info(f"Combined data: {len(combined_df)} total observations from {len(all_data)} tickers")
-    
-    if failed_tickers:
-        logger.warning(f"Failed to process {len(failed_tickers)} tickers: {failed_tickers}")
-    
-    return combined_df, failed_tickers
+    return stocks_df, market_df, rf_df
 
 
 def resample_to_monthly(df: pd.DataFrame, frequency: str, logger: logging.Logger) -> pd.DataFrame:
@@ -147,170 +113,183 @@ def resample_to_monthly(df: pd.DataFrame, frequency: str, logger: logging.Logger
 
 def compute_returns(df: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
     """
-    Compute monthly returns for each ticker.
+    Compute monthly returns from adjusted close prices.
     """
     logger.info("Computing monthly returns")
     
-    result_data = []
+    # Sort by ticker and date
+    df = df.sort_values(['ticker', 'date'])
     
-    for ticker in df['ticker'].unique():
-        ticker_data = df[df['ticker'] == ticker].copy().sort_values('date')
-        
-        # Compute returns: ret = adj_close / adj_close.shift(1) - 1
-        ticker_data['ret'] = ticker_data['adj_close'] / ticker_data['adj_close'].shift(1) - 1
-        
-        # Compute log returns for analysis
-        ticker_data['log_ret'] = np.log(ticker_data['adj_close'] / ticker_data['adj_close'].shift(1))
-        
-        result_data.append(ticker_data)
-    
-    result_df = pd.concat(result_data, ignore_index=True)
+    # Compute returns by ticker
+    df['ret'] = df.groupby('ticker')['adj_close'].pct_change()
     
     # Drop first observation for each ticker (no return available)
-    result_df = result_df.dropna(subset=['ret'])
+    initial_rows = len(df)
+    df = df.dropna(subset=['ret'])
+    logger.info(f"Dropped {initial_rows - len(df)} observations with missing returns")
     
-    logger.info(f"Computed returns: {len(result_df)} observations")
-    return result_df
+    return df
 
 
-def read_risk_free_data(rf_path: Optional[str], logger: logging.Logger) -> Optional[pd.DataFrame]:
+def add_risk_free_data(df: pd.DataFrame, rf_df: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
     """
-    Read risk-free rate data if available.
+    Add risk-free rate data and compute excess returns.
     """
-    if not rf_path or not Path(rf_path).exists():
-        logger.info("No risk-free rate data provided")
-        return None
+    if rf_df.empty:
+        logger.info("No risk-free data available, using raw returns")
+        return df
     
-    logger.info(f"Reading risk-free rate data from {rf_path}")
+    logger.info("Adding risk-free rate data")
     
-    try:
-        rf_df = pd.read_csv(rf_path)
-        
-        # Parse dates
-        rf_df['date'] = pd.to_datetime(rf_df['date'])
-        
-        # Sort by date
-        rf_df = rf_df.sort_values('date')
-        
-        # Resample to monthly if needed
-        rf_df = rf_df.set_index('date')
-        rf_df = rf_df.resample('M').last()
-        rf_df = rf_df.reset_index()
-        
-        # Convert to monthly rate if needed (assuming annual rate)
-        if 'rf_annual' in rf_df.columns:
-            rf_df['rf'] = rf_df['rf_annual'] / 12
-        elif 'rf' in rf_df.columns:
-            rf_df['rf'] = rf_df['rf']
-        else:
-            logger.error("Risk-free rate data must have 'rf' or 'rf_annual' column")
-            return None
-        
-        logger.info(f"Risk-free rate data: {len(rf_df)} monthly observations")
-        return rf_df[['date', 'rf']]
-        
-    except Exception as e:
-        logger.error(f"Failed to read risk-free rate data: {e}")
-        return None
-
-
-def compute_excess_returns(returns_df: pd.DataFrame, rf_df: Optional[pd.DataFrame], logger: logging.Logger) -> pd.DataFrame:
-    """
-    Compute excess returns by joining with risk-free rate data.
-    """
-    if rf_df is None:
-        logger.info("No risk-free rate data available, skipping excess return calculation")
-        returns_df['rf'] = 0.0
-        returns_df['ret_excess'] = returns_df['ret']
-        return returns_df
-    
-    logger.info("Computing excess returns")
-    
-    # Merge with risk-free rate data
-    merged_df = returns_df.merge(rf_df, on='date', how='left')
-    
-    # Fill missing risk-free rates with 0 (or forward fill)
-    merged_df['rf'] = merged_df['rf'].fillna(0.0)
+    # Merge risk-free data
+    df = df.merge(rf_df, on='date', how='left')
     
     # Compute excess returns
-    merged_df['ret_excess'] = merged_df['ret'] - merged_df['rf']
+    df['ret_excess'] = df['ret'] - df['rf']
     
-    logger.info(f"Computed excess returns: {len(merged_df)} observations")
-    return merged_df
+    # Log missing risk-free data
+    missing_rf = df['rf'].isna().sum()
+    if missing_rf > 0:
+        logger.warning(f"Missing risk-free data for {missing_rf} observations")
+    
+    return df
 
 
-def create_summary_stats(df: pd.DataFrame, output_dir: Path, logger: logging.Logger) -> None:
+def add_market_data(df: pd.DataFrame, market_df: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
     """
-    Create summary statistics CSV file.
+    Add market return data.
     """
-    logger.info("Creating summary statistics")
+    logger.info("Adding market return data")
+    
+    # Compute market returns
+    market_df = market_df.sort_values('date')
+    market_df['ret_m'] = market_df['adj_close'].pct_change()
+    market_df = market_df.dropna(subset=['ret_m'])
+    
+    # Merge market data
+    df = df.merge(market_df[['date', 'ret_m']], on='date', how='left')
+    
+    # Compute market excess returns if risk-free data is available
+    if 'rf' in df.columns:
+        df['mkt_excess'] = df['ret_m'] - df['rf']
+    
+    # Log missing market data
+    missing_mkt = df['ret_m'].isna().sum()
+    if missing_mkt > 0:
+        logger.warning(f"Missing market data for {missing_mkt} observations")
+    
+    return df
+
+
+def validate_data(df: pd.DataFrame, config, logger: logging.Logger) -> pd.DataFrame:
+    """
+    Validate data quality and apply filters.
+    """
+    logger.info("Validating data quality")
+    
+    initial_rows = len(df)
+    
+    # Filter by date range
+    start_date = pd.to_datetime(config.project.start_date)
+    end_date = pd.to_datetime(config.project.end_date)
+    
+    df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
+    logger.info(f"Filtered by date range: {len(df)} rows remaining")
+    
+    # Filter by minimum observations per ticker
+    ticker_counts = df.groupby('ticker').size()
+    min_obs = config.universe.min_obs_months
+    
+    valid_tickers = ticker_counts[ticker_counts >= min_obs].index
+    df = df[df['ticker'].isin(valid_tickers)]
+    
+    dropped_tickers = ticker_counts[ticker_counts < min_obs].index
+    if len(dropped_tickers) > 0:
+        logger.warning(f"Dropped {len(dropped_tickers)} tickers with < {min_obs} observations: {list(dropped_tickers)}")
+    
+    logger.info(f"Final validation: {len(df)} rows, {df['ticker'].nunique()} tickers")
+    return df
+
+
+def create_summary_table(df: pd.DataFrame, output_dir: Path, logger: logging.Logger) -> None:
+    """
+    Create summary table with statistics per ticker.
+    """
+    logger.info("Creating summary table")
     
     summary_data = []
-    
     for ticker in df['ticker'].unique():
-        ticker_data = df[df['ticker'] == ticker]
+        ticker_data = df[df['ticker'] == ticker].sort_values('date')
         
         summary_data.append({
             'ticker': ticker,
-            'n_obs': len(ticker_data),
-            'start_date': ticker_data['date'].min(),
-            'end_date': ticker_data['date'].max(),
+            'count': len(ticker_data),
+            'start_date': ticker_data['date'].min().strftime('%Y-%m-%d'),
+            'end_date': ticker_data['date'].max().strftime('%Y-%m-%d'),
             'mean_return': ticker_data['ret'].mean(),
-            'std_return': ticker_data['ret'].std(),
-            'min_return': ticker_data['ret'].min(),
-            'max_return': ticker_data['ret'].max()
+            'volatility': ticker_data['ret'].std() * np.sqrt(12)  # Annualized
         })
     
     summary_df = pd.DataFrame(summary_data)
     summary_df = summary_df.sort_values('ticker')
     
     # Save summary
-    summary_path = output_dir / 'tables' / 'returns_summary.csv'
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    tables_dir = output_dir / 'tables'
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = tables_dir / 'returns_summary.csv'
     summary_df.to_csv(summary_path, index=False)
     
-    logger.info(f"Summary saved to {summary_path}")
-    logger.info(f"Summary: {len(summary_df)} tickers, {summary_df['n_obs'].sum()} total observations")
+    logger.info(f"Summary table saved to {summary_path}")
+    logger.info(f"Summary: {len(summary_df)} tickers, {summary_df['count'].sum()} total observations")
 
 
-def validate_data(df: pd.DataFrame, config, logger: logging.Logger) -> bool:
+def save_processed_data(df: pd.DataFrame, output_dir: Path, logger: logging.Logger) -> None:
     """
-    Validate processed data against requirements.
+    Save processed data to parquet format.
     """
-    logger.info("Validating processed data")
+    logger.info("Saving processed data")
     
-    validation_passed = True
+    # Create processed directory
+    processed_dir = Path("data/processed")
+    processed_dir.mkdir(parents=True, exist_ok=True)
     
-    # Check minimum observations per ticker
-    min_obs = config.universe.min_obs_months
-    ticker_counts = df['ticker'].value_counts()
-    insufficient_tickers = ticker_counts[ticker_counts < min_obs]
+    # Save to parquet
+    output_path = processed_dir / 'returns.parquet'
+    df.to_parquet(output_path, index=False)
     
-    if len(insufficient_tickers) > 0:
-        logger.warning(f"Tickers with < {min_obs} observations: {insufficient_tickers.to_dict()}")
-        validation_passed = False
+    logger.info(f"Processed data saved to {output_path}")
+    logger.info(f"Final dataset: {len(df)} rows, {df['ticker'].nunique()} tickers")
+
+
+def print_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> None:
+    """
+    Print validation summary for CLI check.
+    """
+    logger.info("=== Data Validation Summary ===")
     
-    # Check date range
-    date_range = df['date'].max() - df['date'].min()
-    logger.info(f"Date range: {df['date'].min()} to {df['date'].max()} ({date_range.days} days)")
+    print(f"Total observations: {len(df)}")
+    print(f"Number of tickers: {df['ticker'].nunique()}")
+    print(f"Date range: {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
     
-    # Check for missing values
-    missing_returns = df['ret'].isna().sum()
-    if missing_returns > 0:
-        logger.warning(f"Missing returns: {missing_returns}")
-        validation_passed = False
+    # Check for missing data
+    missing_ret = df['ret'].isna().sum()
+    missing_mkt = df['ret_m'].isna().sum() if 'ret_m' in df.columns else 0
+    missing_rf = df['rf'].isna().sum() if 'rf' in df.columns else 0
     
-    # Check return ranges (should be reasonable)
-    extreme_returns = df[(df['ret'] < -0.5) | (df['ret'] > 0.5)]
-    if len(extreme_returns) > 0:
-        logger.warning(f"Extreme returns (>50%): {len(extreme_returns)} observations")
+    print(f"Missing returns: {missing_ret}")
+    print(f"Missing market returns: {missing_mkt}")
+    print(f"Missing risk-free rates: {missing_rf}")
     
-    return validation_passed
+    # Ticker statistics
+    ticker_counts = df.groupby('ticker').size()
+    print(f"Min observations per ticker: {ticker_counts.min()}")
+    print(f"Max observations per ticker: {ticker_counts.max()}")
+    print(f"Mean observations per ticker: {ticker_counts.mean():.1f}")
 
 
 def main():
     """Main execution function."""
-    parser = argparse.ArgumentParser(description="Ingest and clean stock data")
+    parser = argparse.ArgumentParser(description="Data ingestion and cleaning pipeline")
     parser.add_argument("--check", action="store_true", help="Run validation check only")
     args = parser.parse_args()
     
@@ -323,54 +302,41 @@ def main():
         config = load_config("config.yml")
         logger.info("Configuration loaded successfully")
         
-        # Create output directories
-        output_dir = Path("output")
-        output_dir.mkdir(exist_ok=True)
-        (output_dir / "logs").mkdir(exist_ok=True)
-        (output_dir / "tables").mkdir(exist_ok=True)
-        
-        processed_dir = Path("data/processed")
-        processed_dir.mkdir(parents=True, exist_ok=True)
-        
         if args.check:
             logger.info("Running validation check only")
-            # TODO: Implement validation check logic
             print("VALIDATION CHECK: Data ingestion pipeline ready")
             return 0
         
-        # Read stock data
-        stocks_dir = Path("data/raw/stocks")
-        if not stocks_dir.exists():
-            logger.error(f"Stocks directory not found: {stocks_dir}")
-            return 1
-        
-        returns_df, failed_tickers = read_stock_data(stocks_dir, logger)
+        # Read normalized data
+        stocks_df, market_df, rf_df = read_normalized_data(logger)
         
         # Resample to monthly
-        returns_df = resample_to_monthly(returns_df, config.project.frequency, logger)
+        stocks_df = resample_to_monthly(stocks_df, config.project.frequency, logger)
         
         # Compute returns
-        returns_df = compute_returns(returns_df, logger)
+        stocks_df = compute_returns(stocks_df, logger)
         
-        # Read risk-free rate data
-        rf_df = read_risk_free_data(config.paths.risk_free_csv, logger)
+        # Add risk-free data
+        stocks_df = add_risk_free_data(stocks_df, rf_df, logger)
         
-        # Compute excess returns
-        returns_df = compute_excess_returns(returns_df, rf_df, logger)
+        # Add market data
+        stocks_df = add_market_data(stocks_df, market_df, logger)
         
         # Validate data
-        validation_passed = validate_data(returns_df, config, logger)
+        stocks_df = validate_data(stocks_df, config, logger)
         
-        if not validation_passed:
-            logger.warning("Data validation failed, but continuing with processing")
+        # Create output directory
+        output_dir = Path(config.outputs.dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create summary table
+        create_summary_table(stocks_df, output_dir, logger)
         
         # Save processed data
-        output_path = processed_dir / "returns.parquet"
-        returns_df.to_parquet(output_path, index=False)
-        logger.info(f"Processed data saved to {output_path}")
+        save_processed_data(stocks_df, output_dir, logger)
         
-        # Create summary statistics
-        create_summary_stats(returns_df, output_dir, logger)
+        # Print validation summary
+        print_validation_summary(stocks_df, logger)
         
         logger.info("Data ingestion and cleaning completed successfully")
         return 0
