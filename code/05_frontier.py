@@ -588,8 +588,9 @@ def main():
         # Check for risk-free rate
         R_f = None
         if 'rf' in df.columns and df['rf'].notna().any():
-            R_f = df['rf'].mean()
-            logger.info(f"Using risk-free rate: {R_f:.4f}")
+            # Use the latest (most recent) risk-free rate, not the historical average
+            R_f = df['rf'].iloc[-1]
+            logger.info(f"Using latest risk-free rate: {R_f:.4f} ({R_f*100:.2f}%)")
         else:
             logger.info(f"Using zero-beta rate: {R_Z:.4f}")
         
