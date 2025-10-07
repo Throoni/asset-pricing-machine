@@ -35,7 +35,10 @@ This document provides step-by-step commands to run the asset pricing analysis p
 
 ### Step 1: Data Ingestion and Cleaning
 ```bash
-# TODO: Command will be added in Step 3
+# Validate data before processing
+python code/02_ingest_clean.py --check
+
+# Run full data ingestion and cleaning
 python code/02_ingest_clean.py
 ```
 
@@ -93,8 +96,10 @@ pytest tests/test_pipeline_integrity.py -v
 ### Stock CSV Files
 - **Location:** `data/raw/stocks/`
 - **Format:** One CSV per stock
-- **Required Columns:** TODO - Will be defined in Step 3
+- **Required Columns:** `date`, `ticker`, `adj_close`
 - **Naming:** `{TICKER}.csv` (e.g., `ABI.BR.csv`)
+- **Date Format:** YYYY-MM-DD
+- **Price Format:** Adjusted close prices (decimal)
 
 ### Index CSV File
 - **Location:** `data/raw/index/index.csv`
@@ -121,7 +126,15 @@ pytest tests/test_pipeline_integrity.py -v
 ### Tables
 - **Location:** `output/tables/`
 - **Format:** CSV files with analysis results
-- **Files:** TODO - Will be defined as pipeline develops
+- **Files:** 
+  - `returns_summary.csv` - Summary statistics for each ticker
+  - TODO - Additional tables will be defined as pipeline develops
+
+### Processed Data
+- **Location:** `data/processed/`
+- **Format:** Parquet files with processed data
+- **Files:**
+  - `returns.parquet` - Cleaned stock returns with excess returns
 
 ### Figures
 - **Location:** `output/figs/`

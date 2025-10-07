@@ -29,6 +29,12 @@ This document defines all columns and variables that will be created during the 
 - **Calculation:** ret_m - rf_m
 - **Units:** Decimal
 
+### log_ret
+- **Type:** float
+- **Description:** Log return (continuously compounded)
+- **Calculation:** log(adj_close / adj_close.shift(1))
+- **Units:** Decimal
+
 ### rf_m
 - **Type:** float
 - **Description:** Monthly risk-free rate
@@ -46,6 +52,12 @@ This document defines all columns and variables that will be created during the 
 ### mkt_ret_excess
 - **Type:** float
 - **Description:** Market excess return
+- **Calculation:** mkt_ret - rf_m
+- **Units:** Decimal
+
+### mkt_excess
+- **Type:** float
+- **Description:** Market excess return (alias for mkt_ret_excess)
 - **Calculation:** mkt_ret - rf_m
 - **Units:** Decimal
 
