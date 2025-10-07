@@ -1,0 +1,45 @@
+# Asset Pricing Machine Configuration
+# All TODO values must be filled before running the analysis
+
+project:
+  country: TODO   # e.g., Belgium or Germany
+  base_currency: TODO  # e.g., EUR
+  timezone: Europe/Brussels
+  start_date: TODO      # e.g., 2015-01-01
+  end_date:   TODO
+  frequency: M
+  seed: 42
+
+universe:
+  method: static_list   # or top_n_mcap
+  min_obs_months: 24
+  allow_unbalanced: true
+  path_static_list: data/raw/stocks/   # folder with 25 CSVs (one per stock)
+
+benchmarks:
+  market_index: TODO    # e.g., use_value_weighted_of_universe or an index CSV
+  risk_model: both      # options: rf_capm, zero_beta, both
+  risk_free_source: TODO  # required if risk_model includes rf_capm; else leave TODO
+  index_csv: data/raw/index/index.csv  # if using an index file; else leave TODO
+
+paths:
+  risk_free_csv: data/raw/rf/risk_free.csv   # optional; leave if unknown
+  fundamentals_csv: data/raw/fundamentals.csv  # optional B/M; leave if unknown
+  market_caps_csv: data/raw/market_caps.csv    # optional VW weights
+
+regression:
+  nw_lags: 4
+  winsorize_pct: 0.01
+
+optimization:
+  allow_shorting: false
+  weight_bounds: [0.0, 0.25]
+  covariance_estimator: ledoit_wolf
+
+value_effect:
+  enabled: false       # set true if fundamentals provided
+  bm_lag_months: 6
+  sort_breakpoints: tertiles
+
+outputs:
+  dir: output
