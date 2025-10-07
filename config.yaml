@@ -1,0 +1,20 @@
+paths:
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  rf_file: "data/raw/risk_free/rf_eur.csv"
+  output_figs: "output/figs"
+  logs: "output/logs"
+
+market:
+  tickers: ["SAP.DE", "BAS.DE", "VOW3.DE", "DTE.DE", "BMW.DE"]
+  currency: "EUR"
+  benchmark: "SX5E"
+
+risk_free:
+  source: "euribor_1m"
+  latest_method: "iloc[-1]"        # use latest rate
+  expected_range: [-0.01, 0.05]    # sanity check: -1% to +5% monthly decimal
+
+frontier:
+  expected_sharpe_range: [0.0, 1.5]
+  max_weight_sum_error: 1e-6
