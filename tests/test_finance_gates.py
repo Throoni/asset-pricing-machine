@@ -50,13 +50,27 @@ class TestFinanceGates:
         
         vw_summary = pd.read_csv(vw_summary_path)
         
-        # Check if using value-weighted method
-        if vw_summary['method'].iloc[0] == "CAPM" and "VW" in vw_summary['notes'].iloc[0]:
-            vw_beta = vw_summary['vw_beta'].iloc[0]
-            assert 0.85 <= vw_beta <= 1.15, f"VW beta {vw_beta:.3f} not in [0.85, 1.15]"
+        # Check if weights are available with sufficient coverage
+        weights_path = Path("data/processed/market_caps_weights.csv")
+        if weights_path.exists():
+            weights_df = pd.read_csv(weights_path)
+            betas_path = Path("output/tables/betas.csv")
+            if betas_path.exists():
+                betas_df = pd.read_csv(betas_path)
+                capm_tickers = set(betas_df[betas_df['model_type'] == 'CAPM']['ticker'].unique())
+                weight_tickers = set(weights_df['ticker'].unique())
+                coverage = len(capm_tickers.intersection(weight_tickers)) / len(capm_tickers)
+                
+                if coverage >= 0.8:
+                    # Weights available with sufficient coverage - enforce VW gate
+                    vw_beta = vw_summary['vw_beta'].iloc[0]
+                    assert 0.85 <= vw_beta <= 1.15, f"VW beta {vw_beta:.3f} not in [0.85, 1.15]"
+                else:
+                    pytest.xfail(f"weights unavailable or insufficient coverage: {coverage:.1%}")
+            else:
+                pytest.xfail("weights unavailable or insufficient coverage")
         else:
-            # Using equal-weighted fallback
-            pytest.xfail("Using equal-weighted market due to missing market cap data")
+            pytest.xfail("weights unavailable or insufficient coverage")
     
     def test_capm_cross_section_intercept(self):
         """Test that CAPM cross-section intercept is approximately 0."""

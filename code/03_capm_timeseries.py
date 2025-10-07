@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
+
+from utils.weights import load_vw_weights
 from statsmodels.regression.linear_model import OLS
 from statsmodels.stats.sandwich_covariance import cov_hac
 from statsmodels.tools import add_constant
@@ -318,7 +320,7 @@ def estimate_betas(df: pd.DataFrame, config, logger: logging.Logger) -> pd.DataF
     return results_df
 
 
-def create_vw_beta_summary(betas_df: pd.DataFrame, market_df: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
+def create_vw_beta_summary(betas_df: pd.DataFrame, market_df: pd.DataFrame, config, logger: logging.Logger) -> pd.DataFrame:
     """Create value-weighted beta summary."""
     logger.info("Creating VW beta summary")
     
@@ -339,15 +341,32 @@ def create_vw_beta_summary(betas_df: pd.DataFrame, market_df: pd.DataFrame, logg
     # Compute equal-weighted average beta
     ew_beta = capm_betas['beta'].mean()
     
-    # For value-weighted beta, we'd need market cap weights
-    # For now, use equal-weighted as approximation
-    vw_beta = ew_beta
+    # Try to load VW weights
+    universe_tickers = set(capm_betas['ticker'].unique())
+    weights_df = load_vw_weights(config, universe_tickers)
+    
+    if weights_df is not None:
+        # Compute value-weighted beta
+        merged_df = capm_betas.merge(weights_df[['ticker', 'weight']], on='ticker', how='inner')
+        vw_beta = (merged_df['beta'] * merged_df['weight']).sum()
+        
+        # Get asof date if available
+        asof = weights_df['asof'].iloc[0] if 'asof' in weights_df.columns and weights_df['asof'].notna().any() else None
+        asof_str = f" (as-of {asof})" if asof else ""
+        notes = f"VW beta from provided weights{asof_str}"
+        
+        logger.info(f"VW beta computed using {len(merged_df)} stocks with weights")
+    else:
+        # Fallback to equal-weighted
+        vw_beta = ew_beta
+        notes = "VW beta approximated by EW (weights unavailable)"
+        logger.warning("Using equal-weighted beta as fallback")
     
     summary_df = pd.DataFrame([{
         'method': method,
         'vw_beta': vw_beta,
         'ew_beta': ew_beta,
-        'notes': 'VW beta approximated by EW (market cap weights not available)'
+        'notes': notes
     }])
     
     logger.info(f"VW beta summary: EW={ew_beta:.3f}, VW={vw_beta:.3f}")
@@ -488,7 +507,7 @@ def main():
             return 1
         
         # Create VW beta summary
-        vw_summary_df = create_vw_beta_summary(betas_df, market_df, logger)
+        vw_summary_df = create_vw_beta_summary(betas_df, market_df, config, logger)
         
         # Create beta histogram
         output_dir = Path("output")
