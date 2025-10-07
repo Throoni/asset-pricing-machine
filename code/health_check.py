@@ -1,6 +1,7 @@
 import yaml, pandas as pd
 from pathlib import Path
 from utils.logger import setup_logger
+from utils.rf_utils import load_rf_monthly_decimal, is_recent
 
 def check_paths(cfg):
     paths = [
@@ -16,22 +17,44 @@ def check_paths(cfg):
 
 def check_rf(cfg):
     try:
-        # Use processed data instead of raw CSV
-        df = pd.read_parquet("data/processed/returns.parquet")
-        if 'rf' not in df.columns:
-            return False, "No RF column in processed data"
-        latest = df['rf'].iloc[-1]
+        df = load_rf_monthly_decimal(cfg["paths"]["rf_file"])
+        if df.empty:
+            return False, "Parsed RF is empty"
+        latest_row = df.iloc[-1]
+        latest_val = float(latest_row["rf"])
+        latest_date = pd.to_datetime(latest_row["date"])
         lo, hi = cfg["risk_free"]["expected_range"]
-        ok = lo <= latest <= hi
-        return ok, f"Latest RF={latest:.4%}"
+        in_range = (lo <= latest_val <= hi)
+        recent = is_recent(latest_date, max_age_days=120)
+        ok = in_range and recent
+        recency_msg = "recent" if recent else "stale"
+        return ok, f"Latest RF={latest_val:.4%} on {latest_date.date()} ({recency_msg})"
     except Exception as e:
         return False, f"RF check failed: {e}"
 
 def check_frontier(cfg):
-    sharpe = 0.91  # placeholder for now
-    lo, hi = cfg["frontier"]["expected_sharpe_range"]
-    ok = lo <= sharpe <= hi
-    return ok, f"Sharpe={sharpe:.2f}"
+    """
+    Read the actual tangency Sharpe from output/tables/optimizer_weights.csv
+    Expect columns: portfolio, expected_return, volatility, sharpe_or_slope, ...
+    """
+    try:
+        ow_path = Path("output/tables/optimizer_weights.csv")
+        if not ow_path.exists():
+            return False, "optimizer_weights.csv not found — run frontier first"
+        df = pd.read_csv(ow_path)
+        if "portfolio" not in df.columns or "sharpe_or_slope" not in df.columns:
+            return False, "optimizer_weights.csv missing required columns"
+        row = df[df["portfolio"].str.contains("tangency", case=False, na=False)]
+        if row.empty:
+            row = df[df["portfolio"].str.contains("zero_beta_tangent", case=False, na=False)]
+        if row.empty:
+            return False, "Tangency row not found in optimizer_weights.csv"
+        sharpe = float(row.iloc[0]["sharpe_or_slope"])
+        lo, hi = cfg["frontier"]["expected_sharpe_range"]
+        ok = lo <= sharpe <= hi
+        return ok, f"Tangency Sharpe={sharpe:.2f}"
+    except Exception as e:
+        return False, f"Frontier check failed: {e}"
 
 def main():
     cfg = yaml.safe_load(open("config.yaml"))
