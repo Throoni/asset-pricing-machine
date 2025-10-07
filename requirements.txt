@@ -8,3 +8,5 @@ pydantic==2.7.3
 tqdm==4.66.4
 pyarrow==16.1.0
 pytest==8.2.0
+dash==2.14.2
+plotly==5.17.0
