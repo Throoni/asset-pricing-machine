@@ -124,11 +124,37 @@ def build_equal_weighted_market(df: pd.DataFrame, logger: logging.Logger) -> pd.
 
 def build_index_market(index_path: str, logger: logging.Logger) -> pd.DataFrame:
     """Build market return series from index file."""
-    index_df = pd.read_csv(index_path)
-    index_df['date'] = pd.to_datetime(index_df['date'])
+    # Check if we have normalized data first
+    staging_file = Path("data/staging/market_normalized.parquet")
+    if staging_file.exists():
+        logger.info("Using normalized market data from staging")
+        index_df = pd.read_parquet(staging_file)
+    else:
+        # Fallback to raw CSV
+        index_df = pd.read_csv(index_path)
+        index_df['date'] = pd.to_datetime(index_df['date'])
+        
+        # Standardize column names
+        index_df.columns = index_df.columns.str.lower().str.replace(' ', '_')
+        
+        # Handle different price column names
+        price_cols = ['adj_close', 'adjclose', 'close', 'adjusted_close']
+        price_col = None
+        for col in price_cols:
+            if col in index_df.columns:
+                price_col = col
+                break
+        
+        if price_col is None:
+            raise ValueError(f"No price column found in {index_path}")
+        
+        # Rename to standard column
+        index_df = index_df.rename(columns={price_col: 'adj_close'})
+    
+    # Sort by date
+    index_df = index_df.sort_values('date')
     
     # Compute returns
-    index_df = index_df.sort_values('date')
     index_df['ret_m'] = index_df['adj_close'] / index_df['adj_close'].shift(1) - 1
     index_df = index_df.dropna()
     
@@ -443,11 +469,16 @@ def main():
         # Load processed data
         df = load_processed_data(logger)
         
-        # Build market return series
-        market_df = build_market_return_series(df, config, logger)
-        
-        # Compute excess returns
-        df, market_df = compute_excess_returns(df, market_df, logger)
+        # Check if market data is already in processed data
+        if 'ret_m' in df.columns and 'mkt_excess' in df.columns:
+            logger.info("Using existing market data from processed file")
+            market_df = df[['date', 'ret_m']].drop_duplicates().sort_values('date')
+        else:
+            # Build market return series
+            market_df = build_market_return_series(df, config, logger)
+            
+            # Compute excess returns
+            df, market_df = compute_excess_returns(df, market_df, logger)
         
         # Estimate betas
         betas_df = estimate_betas(df, config, logger)
