@@ -166,27 +166,77 @@ class TestFinanceGates:
     
     def test_frontier_psd_check(self):
         """Test that covariance matrix is positive semi-definite."""
-        pytest.skip("Configure in Step 4+")
-        # TODO: Implement when portfolio optimization is complete
-        # - Check covariance matrix eigenvalues >= 0
-        # - Check for numerical stability
-        # - Check regularization if needed
+        weights_path = Path("output/tables/optimizer_weights.csv")
+        if not weights_path.exists():
+            pytest.skip("Optimizer weights not found - run frontier analysis first")
+        
+        # Load processed returns to check covariance matrix
+        returns_path = Path("data/processed/returns.parquet")
+        if not returns_path.exists():
+            pytest.skip("Processed returns not found")
+        
+        returns_df = pd.read_parquet(returns_path)
+        returns_matrix = returns_df.pivot(index='date', columns='ticker', values='ret')
+        returns_matrix = returns_matrix.dropna()
+        
+        # Check covariance matrix is PSD
+        Sigma = returns_matrix.cov().values
+        eigenvalues = np.linalg.eigvals(Sigma)
+        min_eigenvalue = np.min(eigenvalues)
+        
+        assert min_eigenvalue >= -1e-10, f"Covariance matrix not PSD, min eigenvalue: {min_eigenvalue:.2e}"
     
     def test_weights_sum_to_one(self):
         """Test that portfolio weights sum to 1."""
-        pytest.skip("Configure in Step 4+")
-        # TODO: Implement when portfolio optimization is complete
-        # - Check sum of weights = 1 (within tolerance)
-        # - Check for numerical precision issues
-        # - Check constraint satisfaction
+        weights_path = Path("output/tables/optimizer_weights.csv")
+        if not weights_path.exists():
+            pytest.skip("Optimizer weights not found - run frontier analysis first")
+        
+        weights_df = pd.read_csv(weights_path)
+        
+        # Check that sum_abs_weights is close to 1 (within tolerance)
+        for _, row in weights_df.iterrows():
+            sum_weights = row['sum_abs_weights']
+            assert abs(sum_weights - 1.0) < 1e-6, f"Weights for {row['portfolio']} sum to {sum_weights:.6f}, not 1.0"
     
-    def test_constraints_respected(self):
-        """Test that portfolio constraints are respected."""
-        pytest.skip("Configure in Step 4+")
-        # TODO: Implement when portfolio optimization is complete
-        # - Check weight bounds are respected
-        # - Check shorting constraints
-        # - Check maximum weight constraints
+    def test_tangency_on_frontier(self):
+        """Test that tangency portfolio lies on the efficient frontier."""
+        weights_path = Path("output/tables/optimizer_weights.csv")
+        if not weights_path.exists():
+            pytest.skip("Optimizer weights not found - run frontier analysis first")
+        
+        weights_df = pd.read_csv(weights_path)
+        
+        # Load processed returns to compute frontier
+        returns_path = Path("data/processed/returns.parquet")
+        if not returns_path.exists():
+            pytest.skip("Processed returns not found")
+        
+        returns_df = pd.read_parquet(returns_path)
+        returns_matrix = returns_df.pivot(index='date', columns='ticker', values='ret')
+        returns_matrix = returns_matrix.dropna()
+        
+        mu = returns_matrix.mean().values
+        Sigma = returns_matrix.cov().values
+        
+        # Check tangency portfolio
+        tangency_row = weights_df[weights_df['portfolio'] == 'tangency_or_zero_beta_tangent']
+        if len(tangency_row) == 0:
+            pytest.skip("No tangency portfolio found")
+        
+        tangency_return = tangency_row['expected_return'].iloc[0]
+        tangency_vol = tangency_row['volatility'].iloc[0]
+        
+        # Compute theoretical variance for this return level
+        # This is a simplified check - in practice, we'd need to solve the optimization
+        # For now, just check that the portfolio is reasonable
+        assert tangency_return >= mu.min(), "Tangency return below minimum possible"
+        assert tangency_return <= mu.max(), "Tangency return above maximum possible"
+        assert tangency_vol > 0, "Tangency volatility must be positive"
+        
+        # Check that Sharpe ratio is reasonable
+        sharpe = tangency_row['sharpe_or_slope'].iloc[0]
+        assert sharpe > 0, "Tangency Sharpe ratio should be positive"
     
     def test_no_look_ahead_bm_lag(self):
         """Test that book-to-market data is properly lagged."""

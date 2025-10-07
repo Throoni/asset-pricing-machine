@@ -339,3 +339,49 @@ This document defines all columns and variables that will be created during the 
 - **Description:** Whether portfolio construction required shorting
 - **True:** Some weights are negative
 - **False:** All weights are non-negative
+
+## Portfolio Optimization Results
+
+### portfolio
+- **Type:** string
+- **Description:** Portfolio type identifier
+- **Values:** "min_var", "tangency_or_zero_beta_tangent", "market", "zero_beta"
+- **min_var:** Minimum variance portfolio
+- **tangency_or_zero_beta_tangent:** Tangency portfolio (with Rf or zero-beta CAL)
+- **market:** Market portfolio (VW or EW)
+- **zero_beta:** Zero-beta portfolio
+
+### expected_return
+- **Type:** float
+- **Description:** Expected annualized return
+- **Calculation:** w^T * μ (portfolio weights times expected returns)
+- **Units:** Decimal
+
+### volatility
+- **Type:** float
+- **Description:** Annualized volatility
+- **Calculation:** sqrt(w^T * Σ * w) * sqrt(12) for monthly data
+- **Units:** Decimal
+
+### sharpe_or_slope
+- **Type:** float
+- **Description:** Sharpe ratio or CAL slope
+- **Calculation:** (expected_return - risk_free_rate) / volatility
+- **Units:** Dimensionless
+
+### beta_vs_market
+- **Type:** float
+- **Description:** Beta relative to market portfolio
+- **Calculation:** Cov(portfolio, market) / Var(market)
+- **Units:** Dimensionless
+
+### sum_abs_weights
+- **Type:** float
+- **Description:** Sum of absolute values of portfolio weights
+- **Purpose:** Validation that weights sum to 1.0
+- **Units:** Dimensionless
+
+### note_on_constraints
+- **Type:** string
+- **Description:** Notes about portfolio construction constraints
+- **Examples:** "shorting=no", "shorting=yes", "market_weights"

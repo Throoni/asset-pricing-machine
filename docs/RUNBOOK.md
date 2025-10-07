@@ -62,7 +62,10 @@ python code/04_capm_crosssection.py
 
 ### Step 4: Efficient Frontier Analysis
 ```bash
-# TODO: Command will be added in Step 6
+# Validate frontier analysis before running
+python code/05_frontier.py --check
+
+# Run full efficient frontier analysis
 python code/05_frontier.py
 ```
 
@@ -139,6 +142,7 @@ pytest tests/test_pipeline_integrity.py -v
   - `fmb_results.csv` - Fama-MacBeth cross-sectional regression results
   - `fmb_with_idio.csv` - Fama-MacBeth with idiosyncratic risk test
   - `zero_beta_portfolio.csv` - Zero-beta portfolio construction results
+  - `optimizer_weights.csv` - Portfolio optimization results and weights
   - TODO - Additional tables will be defined as pipeline develops
 
 ### Processed Data
@@ -154,6 +158,9 @@ pytest tests/test_pipeline_integrity.py -v
   - `beta_hist.png` - Histogram of stock betas
   - `sml_scatter.png` - Security Market Line scatter plot
   - `sml_with_zero_beta.png` - SML with zero-beta rate annotation
+  - `efficient_frontier.png` - Efficient frontier with optimal portfolios
+  - `zero_beta_CAL.png` - Zero-beta Capital Allocation Line (if applicable)
+  - `diversification_impact.png` - Diversification impact analysis
   - TODO - Additional figures will be defined as pipeline develops
 
 ### Summary
@@ -205,3 +212,30 @@ pytest tests/test_pipeline_integrity.py -v
 - **Theory:** Idiosyncratic risk should not be priced (γ_idio ≈ 0)
 - **Test:** |t-stat| < 2.0 indicates idiosyncratic risk is not significant
 - **Implication:** Only systematic risk (beta) matters for expected returns
+
+### Efficient Frontier Analysis
+
+**Efficient Frontier Plot:**
+- **Blue curve:** Efficient frontier showing best risk-return combinations
+- **Red dot:** Market portfolio (VW or EW)
+- **Green dot:** Minimum variance portfolio (lowest risk)
+- **Orange dot:** Tangency portfolio (highest Sharpe ratio)
+- **Purple dot:** Zero-beta portfolio (uncorrelated with market)
+- **Dashed line:** Capital Allocation Line (CAL) from risk-free rate or zero-beta rate
+
+**Zero-Beta CAL Plot (if no risk-free rate):**
+- **Blue curve:** Efficient frontier
+- **Red dashed line:** Zero-beta CAL through RZ tangent to frontier
+- **Interpretation:** Shows optimal portfolio when risk-free rate is not available
+
+**Diversification Impact Plot:**
+- **X-axis:** Number of stocks in portfolio
+- **Y-axis:** Portfolio volatility (risk)
+- **Interpretation:** Shows diminishing returns to diversification
+- **Key insight:** Most diversification benefits come from first 20-30 stocks
+
+**Portfolio Weights Table:**
+- **Min Var:** Lowest risk portfolio
+- **Tangency:** Highest risk-adjusted return portfolio
+- **Market:** Market portfolio (benchmark)
+- **Zero-Beta:** Uncorrelated portfolio (replaces risk-free rate)
