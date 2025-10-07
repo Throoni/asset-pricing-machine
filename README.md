@@ -18,6 +18,9 @@ python main.py cs
 # run efficient frontier
 python main.py frontier
 
+# run validation and intelligence layer
+python main.py validate
+
 # run everything end-to-end (with a health check at start and end)
 python main.py all
 
@@ -27,6 +30,7 @@ make ingest
 make ts
 make cs
 make frontier
+make validate
 make all
 make test
 ```

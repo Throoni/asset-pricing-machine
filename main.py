@@ -36,6 +36,13 @@ def cmd_frontier(args):
         rc = run([sys.executable, "code/05_frontier.py"])
     sys.exit(rc)
 
+def cmd_validate(args):
+    # validation and intelligence
+    rc = run([sys.executable, "code/06_validation.py", "--check"])
+    if rc == 0:
+        rc = run([sys.executable, "code/06_validation.py"])
+    sys.exit(rc)
+
 def cmd_all(args):
     steps = [
         [sys.executable, "code/health_check.py"],
@@ -61,6 +68,7 @@ def main():
     sp.add_parser("ts").set_defaults(fn=cmd_ts)
     sp.add_parser("cs").set_defaults(fn=cmd_cs)
     sp.add_parser("frontier").set_defaults(fn=cmd_frontier)
+    sp.add_parser("validate").set_defaults(fn=cmd_validate)
     sp.add_parser("all").set_defaults(fn=cmd_all)
 
     args = p.parse_args()

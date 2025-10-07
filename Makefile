@@ -1,4 +1,4 @@
-.PHONY: health ingest ts cs frontier all test
+.PHONY: health ingest ts cs frontier validate all test
 
 health:
 	python main.py health
@@ -14,6 +14,9 @@ cs:
 
 frontier:
 	python main.py frontier
+
+validate:
+	python main.py validate
 
 all:
 	python main.py all
