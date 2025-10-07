@@ -53,7 +53,10 @@ python code/03_capm_timeseries.py
 
 ### Step 3: Cross-Sectional CAPM Test
 ```bash
-# TODO: Command will be added in Step 5
+# Validate cross-sectional analysis before running
+python code/04_capm_crosssection.py --check
+
+# Run full cross-sectional CAPM analysis
 python code/04_capm_crosssection.py
 ```
 
@@ -133,6 +136,9 @@ pytest tests/test_pipeline_integrity.py -v
   - `returns_summary.csv` - Summary statistics for each ticker
   - `betas.csv` - Alpha and beta estimates for each stock
   - `vw_beta_summary.csv` - Value-weighted and equal-weighted beta summary
+  - `fmb_results.csv` - Fama-MacBeth cross-sectional regression results
+  - `fmb_with_idio.csv` - Fama-MacBeth with idiosyncratic risk test
+  - `zero_beta_portfolio.csv` - Zero-beta portfolio construction results
   - TODO - Additional tables will be defined as pipeline develops
 
 ### Processed Data
@@ -146,6 +152,8 @@ pytest tests/test_pipeline_integrity.py -v
 - **Format:** PNG/PDF files with charts and plots
 - **Files:** 
   - `beta_hist.png` - Histogram of stock betas
+  - `sml_scatter.png` - Security Market Line scatter plot
+  - `sml_with_zero_beta.png` - SML with zero-beta rate annotation
   - TODO - Additional figures will be defined as pipeline develops
 
 ### Summary
@@ -173,3 +181,27 @@ pytest tests/test_pipeline_integrity.py -v
 - **Location:** `output/logs/`
 - **Format:** Text files with detailed execution logs
 - **Purpose:** Debugging and audit trail
+
+## Interpreting Results
+
+### Cross-Sectional Analysis (Fama-MacBeth)
+
+**γ₀ (gamma-zero) - Intercept:**
+- **CAPM excess returns:** Should be close to zero (no abnormal returns)
+- **Black raw returns:** Should be close to zero-beta rate (RZ)
+- **Significance:** |t-stat| < 2.0 indicates CAPM holds
+
+**γₘ (gamma-m) - Market Risk Premium:**
+- **CAPM excess returns:** Market risk premium (expected excess return for beta=1)
+- **Black raw returns:** Market risk premium above zero-beta rate
+- **Significance:** Should be positive and significant
+
+**Zero-Beta Rate (RZ):**
+- **From regression:** Intercept of Black raw returns regression
+- **From portfolio:** Expected return of zero-beta portfolio
+- **Interpretation:** Risk-free rate in Black model (replaces risk-free rate)
+
+### Idiosyncratic Risk Test
+- **Theory:** Idiosyncratic risk should not be priced (γ_idio ≈ 0)
+- **Test:** |t-stat| < 2.0 indicates idiosyncratic risk is not significant
+- **Implication:** Only systematic risk (beta) matters for expected returns

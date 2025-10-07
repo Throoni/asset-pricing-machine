@@ -84,19 +84,85 @@ class TestFinanceGates:
     
     def test_price_of_risk_sign(self):
         """Test that price of risk sign matches market excess return."""
-        pytest.skip("Configure in Step 4+")
-        # TODO: Implement when cross-section analysis is complete
-        # - Check market risk premium sign
-        # - Check price of risk sign
-        # - Check economic intuition
+        fmb_path = Path("output/tables/fmb_results.csv")
+        if not fmb_path.exists():
+            pytest.skip("FMB results not found - run cross-sectional analysis first")
+        
+        fmb_df = pd.read_csv(fmb_path)
+        
+        # Load processed data to get market returns
+        returns_path = Path("data/processed/returns.parquet")
+        if not returns_path.exists():
+            pytest.skip("Processed returns not found")
+        
+        returns_df = pd.read_csv(returns_path)
+        has_rf = 'rf' in returns_df.columns and returns_df['rf'].notna().any()
+        
+        # Get market excess return
+        if has_rf:
+            market_excess = returns_df['mkt_excess'].mean()
+        else:
+            market_excess = returns_df['ret_m'].mean()
+        
+        # Check sign consistency for each method
+        for _, row in fmb_df.iterrows():
+            gamma_m = row['gamma_m']
+            
+            if has_rf:
+                # For excess returns, gamma_m should have same sign as market excess return
+                if market_excess > 0:
+                    assert gamma_m > 0, f"gamma_m {gamma_m:.3f} should be positive when market excess return is positive"
+                else:
+                    assert gamma_m < 0, f"gamma_m {gamma_m:.3f} should be negative when market excess return is negative"
+            else:
+                # For raw returns, check against zero-beta rate
+                zero_beta_path = Path("output/tables/zero_beta_portfolio.csv")
+                if zero_beta_path.exists():
+                    zero_beta_df = pd.read_csv(zero_beta_path)
+                    R_Z = zero_beta_df['R_Z'].iloc[0]
+                    
+                    if not pd.isna(R_Z):
+                        expected_sign = 1 if market_excess > R_Z else -1
+                        actual_sign = 1 if gamma_m > 0 else -1
+                        assert actual_sign == expected_sign, f"gamma_m sign inconsistent with market return vs zero-beta rate"
+    
+    def test_capm_intercept_gate(self):
+        """Test that CAPM intercept is approximately zero (soft gate)."""
+        fmb_path = Path("output/tables/fmb_results.csv")
+        if not fmb_path.exists():
+            pytest.skip("FMB results not found - run cross-sectional analysis first")
+        
+        fmb_df = pd.read_csv(fmb_path)
+        
+        # Check excess return methods
+        excess_methods = fmb_df[fmb_df['method'].str.contains('excess')]
+        
+        if len(excess_methods) == 0:
+            pytest.skip("No excess return methods available")
+        
+        for _, row in excess_methods.iterrows():
+            t_gamma0 = abs(row['t_gamma0'])
+            
+            if t_gamma0 >= 2.0:
+                pytest.xfail(f"CAPM intercept t-stat {t_gamma0:.3f} >= 2.0 (soft gate)")
+            
+            assert t_gamma0 < 2.0, f"CAPM intercept t-stat {t_gamma0:.3f} >= 2.0"
     
     def test_idiosyncratic_risk_not_priced(self):
-        """Test that idiosyncratic risk is not priced."""
-        pytest.skip("Configure in Step 4+")
-        # TODO: Implement when cross-section analysis is complete
-        # - Check idiosyncratic risk coefficient is not significant (5% level)
-        # - Check residual analysis
-        # - Check model specification
+        """Test that idiosyncratic risk is not priced (soft gate)."""
+        idio_path = Path("output/tables/fmb_with_idio.csv")
+        if not idio_path.exists():
+            pytest.skip("Idiosyncratic risk results not found - run cross-sectional analysis first")
+        
+        idio_df = pd.read_csv(idio_path)
+        
+        for _, row in idio_df.iterrows():
+            t_gamma_idio = abs(row['t_gamma_idio'])
+            
+            if t_gamma_idio >= 2.0:  # 5% significance level
+                pytest.xfail(f"Idiosyncratic risk t-stat {t_gamma_idio:.3f} >= 2.0 (soft gate)")
+            
+            assert t_gamma_idio < 2.0, f"Idiosyncratic risk t-stat {t_gamma_idio:.3f} >= 2.0"
     
     def test_frontier_psd_check(self):
         """Test that covariance matrix is positive semi-definite."""

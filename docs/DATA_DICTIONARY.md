@@ -257,3 +257,85 @@ This document defines all columns and variables that will be created during the 
 - **Type:** string
 - **Description:** Additional information about the calculation
 - **Example:** "VW beta approximated by EW (market cap weights not available)"
+
+## Cross-Sectional Analysis Results
+
+### method
+- **Type:** string
+- **Description:** Cross-sectional regression method
+- **Values:** "static_excess", "static_raw", "fm_excess", "fm_raw", "fm_with_idio_excess", "fm_with_idio_raw"
+- **static_excess:** Static beta SML using excess returns
+- **static_raw:** Static beta SML using raw returns
+- **fm_excess:** Fama-MacBeth using excess returns
+- **fm_raw:** Fama-MacBeth using raw returns
+- **fm_with_idio_excess:** Fama-MacBeth with idiosyncratic risk (excess returns)
+- **fm_with_idio_raw:** Fama-MacBeth with idiosyncratic risk (raw returns)
+
+### gamma0
+- **Type:** float
+- **Description:** Intercept coefficient (γ₀)
+- **CAPM excess:** Should be close to zero
+- **Black raw:** Should be close to zero-beta rate (RZ)
+- **Units:** Decimal
+
+### gamma_m
+- **Type:** float
+- **Description:** Market risk premium coefficient (γₘ)
+- **CAPM excess:** Market risk premium
+- **Black raw:** Market risk premium above zero-beta rate
+- **Units:** Decimal
+
+### t_gamma0
+- **Type:** float
+- **Description:** T-statistic for intercept coefficient
+- **Calculation:** gamma0 / standard_error
+- **Units:** Dimensionless
+
+### t_gamma_m
+- **Type:** float
+- **Description:** T-statistic for market risk premium coefficient
+- **Calculation:** gamma_m / standard_error
+- **Units:** Dimensionless
+
+### n_months
+- **Type:** int
+- **Description:** Number of observations used in regression
+- **Static methods:** Number of stocks
+- **Fama-MacBeth:** Number of months
+- **Units:** Count
+
+### gamma_idio
+- **Type:** float
+- **Description:** Idiosyncratic risk coefficient (only in fm_with_idio methods)
+- **CAPM theory:** Should be zero (idiosyncratic risk not priced)
+- **Units:** Decimal
+
+### t_gamma_idio
+- **Type:** float
+- **Description:** T-statistic for idiosyncratic risk coefficient
+- **Calculation:** gamma_idio / standard_error
+- **Units:** Dimensionless
+
+## Zero-Beta Portfolio
+
+### method
+- **Type:** string
+- **Description:** Zero-beta portfolio construction method
+- **Values:** "zero_beta_portfolio"
+
+### R_Z
+- **Type:** float
+- **Description:** Zero-beta rate (expected return of zero-beta portfolio)
+- **Calculation:** w_Z^T * μ (portfolio weights times expected returns)
+- **Units:** Decimal
+
+### notes
+- **Type:** string
+- **Description:** Additional information about portfolio construction
+- **Example:** "Value-weighted market, shorting=no"
+
+### has_shorting
+- **Type:** bool
+- **Description:** Whether portfolio construction required shorting
+- **True:** Some weights are negative
+- **False:** All weights are non-negative
