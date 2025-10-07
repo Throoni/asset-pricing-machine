@@ -44,7 +44,10 @@ python code/02_ingest_clean.py
 
 ### Step 2: Time Series CAPM Analysis
 ```bash
-# TODO: Command will be added in Step 4
+# Validate CAPM analysis before running
+python code/03_capm_timeseries.py --check
+
+# Run full CAPM time-series analysis
 python code/03_capm_timeseries.py
 ```
 
@@ -128,6 +131,8 @@ pytest tests/test_pipeline_integrity.py -v
 - **Format:** CSV files with analysis results
 - **Files:** 
   - `returns_summary.csv` - Summary statistics for each ticker
+  - `betas.csv` - Alpha and beta estimates for each stock
+  - `vw_beta_summary.csv` - Value-weighted and equal-weighted beta summary
   - TODO - Additional tables will be defined as pipeline develops
 
 ### Processed Data
@@ -139,7 +144,9 @@ pytest tests/test_pipeline_integrity.py -v
 ### Figures
 - **Location:** `output/figs/`
 - **Format:** PNG/PDF files with charts and plots
-- **Files:** TODO - Will be defined as pipeline develops
+- **Files:** 
+  - `beta_hist.png` - Histogram of stock betas
+  - TODO - Additional figures will be defined as pipeline develops
 
 ### Summary
 - **Location:** `output/summary.json`

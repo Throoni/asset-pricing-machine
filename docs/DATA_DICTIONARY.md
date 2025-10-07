@@ -167,3 +167,93 @@ This document defines all columns and variables that will be created during the 
 - **Description:** Data quality indicator
 - **True:** Sufficient data, no major gaps
 - **False:** Insufficient data or quality issues
+
+## CAPM Analysis Results
+
+### ticker
+- **Type:** string
+- **Description:** Stock ticker symbol
+- **Example:** "ABI.BR", "SOLB.BR"
+
+### model_type
+- **Type:** string
+- **Description:** Regression model type
+- **Values:** "CAPM", "Black"
+- **CAPM:** Uses excess returns (ret_excess ~ alpha + beta * mkt_excess)
+- **Black:** Uses raw returns (ret ~ a + beta * ret_m)
+
+### alpha_or_a
+- **Type:** float
+- **Description:** Intercept coefficient (alpha for CAPM, a for Black)
+- **CAPM:** Alpha (abnormal return after accounting for market risk)
+- **Black:** Intercept (expected return when market return is zero)
+- **Units:** Decimal
+
+### beta
+- **Type:** float
+- **Description:** Market sensitivity coefficient
+- **CAPM:** Beta (sensitivity to market excess returns)
+- **Black:** Beta (sensitivity to market returns)
+- **Units:** Dimensionless
+
+### t_alpha_or_a
+- **Type:** float
+- **Description:** T-statistic for intercept coefficient
+- **Calculation:** alpha_or_a / standard_error
+- **Units:** Dimensionless
+
+### t_beta
+- **Type:** float
+- **Description:** T-statistic for beta coefficient
+- **Calculation:** beta / standard_error
+- **Units:** Dimensionless
+
+### r2
+- **Type:** float
+- **Description:** R-squared of regression
+- **Range:** [0, 1]
+- **Units:** Dimensionless
+
+### n
+- **Type:** int
+- **Description:** Number of observations used in regression
+- **Minimum:** config.universe.min_obs_months
+- **Units:** Count
+
+### start
+- **Type:** datetime
+- **Description:** Start date of regression period
+- **Format:** YYYY-MM-DD
+- **Units:** Date
+
+### end
+- **Type:** datetime
+- **Description:** End date of regression period
+- **Format:** YYYY-MM-DD
+- **Units:** Date
+
+## VW Beta Summary
+
+### method
+- **Type:** string
+- **Description:** Method used for beta estimation
+- **Values:** "CAPM", "Black (no CAPM available)"
+- **CAPM:** When risk-free rate is available
+- **Black:** When risk-free rate is not available
+
+### vw_beta
+- **Type:** float
+- **Description:** Value-weighted average beta
+- **Calculation:** Weighted average of individual stock betas
+- **Units:** Dimensionless
+
+### ew_beta
+- **Type:** float
+- **Description:** Equal-weighted average beta
+- **Calculation:** Simple average of individual stock betas
+- **Units:** Dimensionless
+
+### notes
+- **Type:** string
+- **Description:** Additional information about the calculation
+- **Example:** "VW beta approximated by EW (market cap weights not available)"
